@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Morning Tape</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root{
+    --bg:#0A0E17; --panel:#111725; --panel-2:#0D131F; --line:#1F2939; --line-soft:#161F2E;
+    --ink:#EAE7DF; --muted:#7E889B; --amber:#E8A13A; --amber-dim:#9E7027;
+    --up:#46C77C; --down:#F0616D; --teal:#4BA7B5;
+    --display:'Space Grotesk',sans-serif; --mono:'IBM Plex Mono',monospace; --sans:'Inter',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{-webkit-text-size-adjust:100%}
+  body{background:radial-gradient(1200px 500px at 85% -10%, rgba(232,161,58,0.06), transparent 60%),var(--bg);
+    color:var(--ink);font-family:var(--sans);line-height:1.4;padding:clamp(14px,3vw,30px);min-height:100vh}
+  .wrap{max-width:1200px;margin:0 auto}
+  .mast{display:flex;justify-content:space-between;align-items:flex-end;gap:18px;flex-wrap:wrap;
+    border-bottom:2px solid var(--amber-dim);padding-bottom:14px}
+  .brand{display:flex;flex-direction:column;gap:6px}
+  .kicker{font-family:var(--mono);font-size:11px;letter-spacing:.34em;text-transform:uppercase;color:var(--amber)}
+  h1{font-family:var(--display);font-weight:700;font-size:clamp(28px,5.2vw,46px);line-height:.94;letter-spacing:-.02em}
+  h1 em{font-style:normal;color:var(--amber)}
+  .mast-right{text-align:right;font-family:var(--mono);font-size:11.5px;color:var(--muted);line-height:1.7}
+  .mast-right .clock{color:var(--ink);font-size:13px;font-weight:500}
+  .asof{display:inline-block;margin-top:2px;border:1px solid var(--line);border-radius:2px;padding:2px 7px;color:var(--muted)}
+  /* tabs */
+  .tabs{display:flex;gap:2px;margin:18px 0 4px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .tab{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--muted);background:none;border:none;border-bottom:2px solid transparent;
+    padding:10px 16px 11px;cursor:pointer;transition:.15s}
+  .tab:hover{color:var(--ink)}
+  .tab.on{color:var(--amber);border-bottom-color:var(--amber)}
+  .view{display:none;animation:rise .4s cubic-bezier(.2,.7,.2,1) both}
+  .view.on{display:block}
+  .sec-head{display:flex;align-items:center;gap:12px;margin:24px 0 12px}
+  .sec-head .no{font-family:var(--mono);font-size:11px;color:var(--amber);border:1px solid var(--amber-dim);border-radius:2px;padding:1px 6px}
+  .sec-head h2{font-family:var(--display);font-weight:600;font-size:14px;letter-spacing:.16em;text-transform:uppercase}
+  .sec-head .rule{flex:1;height:1px;background:var(--line)}
+  .sec-head .note{font-family:var(--mono);font-size:10.5px;color:var(--muted);letter-spacing:.04em}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:5px}
+  .up{color:var(--up)} .down{color:var(--down)}
+  /* tiles */
+  .tile-row{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line-soft);border:1px solid var(--line);border-radius:5px;overflow:hidden}
+  .tile{background:var(--panel);padding:13px 14px 12px}
+  .tile .lab{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+  .tile .val{font-family:var(--mono);font-weight:600;font-size:clamp(19px,2.3vw,25px);letter-spacing:-.01em;margin-top:7px;font-variant-numeric:tabular-nums}
+  .tile .sub{font-family:var(--mono);font-size:10.5px;margin-top:5px;color:var(--muted)}
+  .tile .sub b{font-weight:600;color:var(--ink)}
+  .chip{font-family:var(--mono);font-size:10px;padding:1px 5px;border-radius:2px;font-weight:500}
+  .chip.hold{background:rgba(75,167,181,.14);color:var(--teal)}
+  .chip.hike{background:rgba(240,97,109,.16);color:var(--down)}
+  /* generic table */
+  table.q{width:100%;border-collapse:collapse}
+  table.q caption{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);text-align:left;padding:11px 14px 6px}
+  table.q td,table.q th{padding:8px 14px;border-top:1px solid var(--line-soft);font-variant-numeric:tabular-nums;text-align:right}
+  table.q th{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:500;border-top:none;padding-top:6px;padding-bottom:6px}
+  table.q td.name,table.q th.name{text-align:left}
+  .q .name{font-family:var(--sans);font-size:13px;font-weight:500}
+  .q td{font-family:var(--mono);font-size:12.5px;color:var(--ink)}
+  .q .chg{font-size:12px;white-space:nowrap}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .grid2b{display:grid;grid-template-columns:1.1fr .9fr;gap:14px}
+  /* headlines */
+  .heads{border:1px solid var(--line);border-radius:5px;background:var(--panel);overflow:hidden}
+  .head-item{display:flex;gap:13px;padding:13px 16px;border-top:1px solid var(--line-soft)}
+  .head-item:first-child{border-top:none}
+  .head-item .dot{flex:none;width:7px;height:7px;border-radius:50%;margin-top:6px;background:var(--muted)}
+  .head-item.rates .dot{background:var(--amber)} .head-item.oil .dot{background:var(--down)} .head-item.macro .dot{background:var(--teal)}
+  .head-item .body{font-size:13.5px}
+  .head-item .body .tagline{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:3px}
+  .head-item.rates .tagline{color:var(--amber)} .head-item.oil .tagline{color:var(--down)} .head-item.macro .tagline{color:var(--teal)}
+  .head-item .body b{font-weight:600;color:#fff}
+  /* catalysts */
+  .cat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  .cat{background:var(--panel-2);border:1px solid var(--line);border-radius:5px;padding:12px 14px}
+  .cat .d{font-family:var(--mono);font-size:11px;color:var(--amber);letter-spacing:.06em}
+  .cat .t{font-size:12.5px;margin-top:5px;color:var(--ink)} .cat .x{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:4px}
+  /* curve svg panel */
+  .curve{padding:14px 16px 12px}
+  .curve .top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px}
+  .curve h3{font-family:var(--display);font-weight:600;font-size:13px}
+  .curve .tag{font-family:var(--mono);font-size:10px;color:var(--amber);letter-spacing:.1em;text-transform:uppercase}
+  .curve svg{width:100%;height:auto;display:block;margin-top:4px}
+  .curve .foot{font-family:var(--mono);font-size:10.5px;color:var(--muted);margin-top:6px;line-height:1.55}
+  /* sovereign strip */
+  .sov{display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:var(--line-soft);border:1px solid var(--line);border-radius:5px;overflow:hidden}
+  .sov .s{background:var(--panel);padding:9px 11px}
+  .sov .s .c{font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  .sov .s .v{font-family:var(--mono);font-size:15px;font-weight:600;margin-top:3px;font-variant-numeric:tabular-nums}
+  /* risk premia */
+  .rp-controls{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px}
+  .rp-controls .grp{display:flex;flex-direction:column;gap:6px}
+  .rp-controls .glab{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+  .btns{display:flex;gap:1px;background:var(--line-soft);border:1px solid var(--line);border-radius:4px;overflow:hidden;flex-wrap:wrap}
+  .btns button{font-family:var(--mono);font-size:11px;color:var(--muted);background:var(--panel);border:none;padding:7px 11px;cursor:pointer;transition:.12s;white-space:nowrap}
+  .btns button:hover{color:var(--ink)}
+  .btns button.on{background:var(--amber);color:#12161f;font-weight:600}
+  #rpBars{margin-top:6px}
+  .bar-row{display:grid;grid-template-columns:150px 1fr 66px;align-items:center;gap:10px;padding:3px 0;font-variant-numeric:tabular-nums}
+  .bar-row .cty{font-size:12px;text-align:right;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .bar-row .cty small{color:var(--muted);font-size:9.5px}
+  .bar-track{position:relative;height:20px;background:var(--panel-2);border-radius:2px}
+  .bar-zero{position:absolute;top:-3px;bottom:-3px;width:1px;background:var(--line)}
+  .bar-fill{position:absolute;top:2px;height:16px;border-radius:2px}
+  .bar-val{font-family:var(--mono);font-size:11.5px;text-align:right}
+  .rp-row.dub .cty{color:var(--amber);font-weight:600}
+  .rp-peak .cty{font-weight:600}.rp-peak .bar-val{color:var(--teal)!important}
+  .rp-note{font-family:var(--mono);font-size:10.5px;color:var(--muted);line-height:1.6;margin-top:14px;border-top:1px solid var(--line);padding-top:12px}
+  .rp-note b{color:var(--ink)}
+
+  /* transactions map */
+  #txnMap{height:620px;border:1px solid var(--line);border-radius:5px;overflow:hidden;background:#d9e4ea;position:relative}
+  #txnFallback{height:100%;width:100%;display:none;position:absolute;inset:0;background:#dbe7eb;overflow:hidden}
+  #txnFallback svg{width:100%;height:100%;display:block}
+  .txn-fallback-water{fill:#b9d9e6}.txn-fallback-land{fill:#e8ece8}.txn-fallback-road{fill:none;stroke:#fff;stroke-width:2;opacity:.9}.txn-fallback-major{fill:none;stroke:#c7b58b;stroke-width:2.6;opacity:.9}.txn-fallback-minor{fill:none;stroke:#d9dde0;stroke-width:1.2}
+  .txn-fallback-label{font-family:IBM Plex Mono,monospace;fill:#63707a;font-size:11px}.txn-fallback-city{font-family:Space Grotesk,sans-serif;fill:#35424a;font-weight:600;font-size:15px}.txn-fallback-marker{stroke:#0A0E17;stroke-width:1.5;cursor:pointer}.txn-fallback-marker.pending{stroke-dasharray:3 2;opacity:.82}
+  .txn-map-note{position:absolute;left:12px;bottom:10px;padding:5px 8px;background:rgba(255,255,255,.88);color:#53606b;border:1px solid #c5d0d6;border-radius:3px;font-family:IBM Plex Mono,monospace;font-size:9px;z-index:500}
+  .leaflet-container{font-family:Inter,sans-serif}
+  .txn-shell{display:grid;grid-template-columns:1fr 310px;gap:14px}
+  .txn-side{background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:14px}
+  .txn-side .stat{padding:9px 0;border-bottom:1px solid var(--line-soft)}
+  .txn-side .stat:last-child{border-bottom:none}
+  .txn-side .slab{font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+  .txn-side .sval{font-family:var(--mono);font-size:18px;margin-top:3px}
+  .txn-market-strip{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:var(--line-soft);border:1px solid var(--line);border-radius:4px;overflow:hidden}.txn-market-strip div{background:var(--panel-2);padding:8px 10px}.txn-market-strip span{display:block;font-family:var(--mono);font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}.txn-market-strip b{display:block;margin-top:3px;font-family:var(--mono);font-size:16px;color:var(--ink)}
+  .txn-legend{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;font-family:var(--mono);font-size:10px;color:var(--muted)}
+  .txn-dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:4px;vertical-align:middle}
+  .txn-popup{font-family:Inter,sans-serif;min-width:220px}
+  .txn-popup h4{font-family:Space Grotesk,sans-serif;margin:0 0 4px;font-size:15px;color:#111725}
+  .txn-popup .meta{font-size:11px;color:#526070;margin-bottom:7px}
+  .txn-popup .grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;font-size:11px}
+  .txn-popup .k{color:#6c7787}.txn-popup .v{font-family:IBM Plex Mono,monospace;font-weight:600;color:#111725}
+  .txn-popup .desc{margin-top:8px;padding-top:8px;border-top:1px solid #d9dde4;font-size:11px;line-height:1.35;color:#2b3442}
+  .txn-popup a{display:inline-block;margin-top:8px;font-size:10px;color:#8a5a13;text-decoration:none;font-family:IBM Plex Mono,monospace}
+  .txn-marker{width:16px;height:16px;border-radius:50%;border:2px solid #0A0E17;box-shadow:0 1px 4px rgba(0,0,0,.45)}
+  .txn-marker.pending{border-style:dashed;opacity:.82}
+  @media(max-width:980px){.txn-shell{grid-template-columns:1fr}.txn-side{order:-1}.txn-side .stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.txn-side .stat{border-bottom:none}}
+  @media(max-width:820px){.txn-market-strip{grid-template-columns:repeat(3,1fr)}}
+  @media(max-width:520px){#txnMap{height:520px}.txn-market-strip{grid-template-columns:repeat(2,1fr)}.txn-side .stats-grid{grid-template-columns:1fr 1fr}}
+  footer{margin-top:24px;padding-top:14px;border-top:1px solid var(--line);font-family:var(--mono);font-size:10.5px;color:var(--muted);line-height:1.7}
+  footer b{color:var(--muted);font-weight:600}
+  @keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  @media (prefers-reduced-motion:reduce){.view{animation:none}}
+  @media (max-width:820px){.grid2,.grid2b{grid-template-columns:1fr}.cat-grid{grid-template-columns:1fr 1fr}.sov{grid-template-columns:repeat(3,1fr)}}
+  @media (max-width:520px){.tile-row{grid-template-columns:1fr}.bar-row{grid-template-columns:110px 1fr 58px}.mast-right{text-align:left}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="mast">
+    <div class="brand">
+      <span class="kicker">Markets Brief · Dublin / London</span>
+      <h1>The&nbsp;Morning&nbsp;<em>Tape</em></h1>
+    </div>
+    <div class="mast-right">
+      <div class="clock" id="clock">—</div>
+      <div>Tue 13 Oct 2026</div>
+      <span class="asof">RATES 13 OCT 2026 · EQUITIES MON CLOSE · TUE EUROPE +</span>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab on" data-v="brief">Brief</button>
+    <button class="tab" data-v="rates">Rates &amp; Curves</button>
+    <button class="tab" data-v="rp">Risk Premia</button>
+    <button class="tab" data-v="transactions">Transactions</button>
+  </nav>
+
+  <!-- ================= BRIEF ================= -->
+  <section class="view on" id="brief">
+    <div class="sec-head"><span class="no">01</span><h2>Rates &amp; Curve</h2><div class="rule"></div><span class="note">the desk's priority</span></div>
+    <div class="grid2b">
+      <div>
+        <div class="tile-row">
+          <div class="tile"><div class="lab">Fed · Sept</div><div class="val">HIKE <span class="chip hike">25bp</span></div><div class="sub">3.75–4.00% · first hike since 2023</div></div>
+          <div class="tile"><div class="lab">ECB · Sept</div><div class="val">HIKE <span class="chip hike">25bp</span></div><div class="sub">Dep 2.25% → <b>2.50%</b> from 16 Sep</div></div>
+          <div class="tile"><div class="lab">BoE · Sept</div><div class="val">HOLD <span class="chip hold">3.75%</span></div><div class="sub">6–3 · 3 voted +25bp</div></div>
+        </div>
+        <div class="tile-row" style="margin-top:14px">
+          <div class="tile"><div class="lab">UST 10Y</div><div class="val">5.24<span style="font-size:12px">%</span></div><div class="sub down">▼ 5bp this morning · latest</div></div>
+          <div class="tile"><div class="lab">UST 30Y</div><div class="val">5.61<span style="font-size:12px">%</span></div><div class="sub">latest available</div></div>
+          <div class="tile"><div class="lab">Bund 10Y</div><div class="val">3.52<span style="font-size:12px">%</span></div><div class="sub">Tue AM</div></div>
+        </div>
+      </div>
+      <div class="panel curve">
+        <div class="top"><h3>UST Curve</h3><span class="tag">bear-steepening</span></div>
+        <svg viewBox="0 0 280 140" xmlns="http://www.w3.org/2000/svg"><g stroke="#1B2536" stroke-width="1"><line x1="30" y1="28" x2="270" y2="28"/><line x1="30" y1="63" x2="270" y2="63"/><line x1="30" y1="98" x2="270" y2="98"/></g><g font-family="IBM Plex Mono, monospace" font-size="8" fill="#616C80"><text x="4" y="31">5.4</text><text x="4" y="66">4.7</text><text x="4" y="101">4.0</text></g><path d="M30,64.0 L130,48.5 L245,31.5 L245,110 L30,110 Z" fill="url(#g)" opacity="0.28"/><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#E8A13A" stop-opacity="0.55"/><stop offset="1" stop-color="#E8A13A" stop-opacity="0"/></linearGradient></defs><path d="M30,64.0 L130,48.5 L245,31.5" fill="none" stroke="#E8A13A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><g font-family="IBM Plex Mono, monospace"><circle cx="30" cy="64.0" r="3.4" fill="#0A0E17" stroke="#E8A13A" stroke-width="2"/><text x="30" y="123" fill="#7E889B" font-size="9" text-anchor="middle">2Y</text><text x="30" y="55.00000000000003" fill="#EAE7DF" font-size="9.5" text-anchor="middle"  >4.79</text><circle cx="130" cy="48.5" r="3.4" fill="#0A0E17" stroke="#E8A13A" stroke-width="2"/><text x="130" y="123" fill="#7E889B" font-size="9" text-anchor="middle">10Y</text><text x="130" y="38.50000000000001" fill="#EAE7DF" font-size="9.5" text-anchor="middle" >5.24</text><circle cx="245" cy="31.5" r="3.4" fill="#0A0E17" stroke="#E8A13A" stroke-width="2"/><text x="245" y="123" fill="#7E889B" font-size="9" text-anchor="middle">30Y</text><text x="245" y="22.500000000000014" fill="#EAE7DF" font-size="9.5" text-anchor="middle">5.61</text></g></svg>
+        <div class="foot">2s10s ≈ <b style="color:#EAE7DF">+40bp</b> · long end under pressure; oil and inflation expectations remain the dominant drivers.</div>
+      </div>
+    </div>
+
+    <div class="sec-head"><span class="no">02</span><h2>Equities · Commodities · Vol</h2><div class="rule"></div><span class="note">US = Mon close · Tue Europe +</span></div>
+    <div class="grid2">
+      <div class="panel"><table class="q"><caption>US Equities · Mon close</caption><tr><td class="name">S&amp;P 500</td><td>7,807.24</td><td class="chg down">▼ 0.06%</td></tr><tr><td class="name">Nasdaq Comp</td><td>27,245.90</td><td class="chg down">▼ 0.44%</td></tr><tr><td class="name">Dow</td><td>51,850.55</td><td class="chg up">▲ 0.38%</td></tr><tr><td class="name">Russell 2000</td><td>2,794.48</td><td class="chg down">▼ 0.40%</td></tr><tr><td class="name">VIX</td><td>15.45</td><td class="chg up">▲ 2.93%</td></tr></table></div>
+      <div class="panel"><table class="q"><caption>Commodities · Mon close / Tue AM</caption><tr><td class="name">Brent</td><td>$105.41</td><td class="chg down">▼ 0.90%</td></tr><tr><td class="name">WTI</td><td>$92.57</td><td class="chg down">▼ 1.10%</td></tr><tr><td class="name">Gold</td><td>$4,216.60</td><td class="chg down">▼ 0.47%</td></tr><tr><td class="name">UST 10Y</td><td>5.24%</td><td class="chg">latest pre-holiday</td></tr><tr><td class="name">UST 30Y</td><td>5.61%</td><td class="chg">latest pre-holiday</td></tr></table></div>
+    </div>
+
+    <div class="sec-head"><span class="no">03</span><h2>What's Moving Markets</h2><div class="rule"></div></div>
+    <div class="heads"><div class="head-item rates"><div class="dot"></div><div class="body"><div class="tagline">Rates</div>US 10Y <b>5.24%</b> this morning after Monday's bond-market holiday; the long end remains elevated. Germany is ~<b>3.52%</b> and France ~<b>4.84%</b>.</div></div><div class="head-item oil"><div class="dot"></div><div class="body"><div class="tagline">Oil</div><b>Brent ~$105</b> Tuesday morning as oil eased modestly in early European trade; Russian diesel supply expectations are helping at the margin, but Middle East disruptions remain the core risk.</div></div><div class="head-item "><div class="dot"></div><div class="body"><div class="tagline">Equities</div>Monday US trading was mixed: <b><b>S&amp;P 7,807</b> (−0.06%), Nasdaq 27,246 (−0.44%), Dow 51,851 (+0.38%). European equities are firmer this morning, with STOXX 600 around +0.4%.</div></div><div class="head-item macro"><div class="dot"></div><div class="body"><div class="tagline">Macro</div>The week is heavy on US data and earnings, with <b>US CPI, PPI and retail sales</b> key releases; major US banks begin Q3 earnings today.</div></div><div class="head-item macro"><div class="dot"></div><div class="body"><div class="tagline">Read-through</div>For the book: Dublin office at <b>4.75%</b> versus Ireland 10Y ~<b>3.57%</b> implies ~<b>+118bp</b>. Paris office at <b>4.50%</b> versus France 10Y ~<b>4.84%</b> remains below sovereign yield.</div></div></div>
+
+    <div class="sec-head"><span class="no">04</span><h2>On The Calendar</h2><div class="rule"></div></div>
+    <div class="cat-grid"><div class="cat"><div class="d">12 Oct</div><div class="t">US close</div><div class="x">S&amp;P 7,807 · UST 10Y 5.24%</div></div><div class="cat"><div class="d">2 Oct</div><div class="t">Eurozone CPI</div><div class="x">Sep flash · 3.8% YoY</div></div><div class="cat"><div class="d">Today</div><div class="t">US markets</div><div class="x">Yields / oil / Fed repricing</div></div><div class="cat"><div class="d">Tuesday AM</div><div class="t">Oil / bonds</div><div class="x">Brent ~$101.5 · UST 10Y ~5.27%</div></div></div>
+  </section>
+
+
+  <!-- ================= TRANSACTIONS ================= -->
+  <section class="view" id="transactions">
+    <div class="sec-head"><span class="no">01</span><h2>Dublin Investment Transactions &amp; Comps</h2><div class="rule"></div><span class="note">publicly reported · verified / announced</span></div>
+    <div class="rp-controls">
+      <div class="grp"><span class="glab">Sector</span><div class="btns" id="txnSectorBtns"></div></div>
+      <div class="grp"><span class="glab">Year</span><div class="btns" id="txnYearBtns"></div></div>
+    </div>
+    <div class="txn-shell">
+      <div class="panel"><div id="txnMap"></div></div>
+      <div class="txn-side">
+        <div class="stats-grid">
+          <div class="stat"><div class="slab">Visible comps</div><div class="sval" id="txnCount">—</div></div>
+          <div class="stat"><div class="slab">Visible value</div><div class="sval" id="txnValue">—</div></div>
+          <div class="stat"><div class="slab">Latest year</div><div class="sval" id="txnLatest">—</div></div>
+        </div>
+        <div class="rp-note" style="margin-top:10px">Hover a marker for a quick deal summary; click/tap to keep it open. Values are reported transaction prices unless explicitly marked as a guide / estimated / agreed figure.</div>
+        <div class="txn-legend" id="txnLegend"></div>
+      </div>
+    </div>
+    <div class="rp-note"><b>Initial dataset:</b> assembled from public agent releases, CBRE / Knight Frank / Colliers research and Irish Times / RTE reporting. This is the seed comp set only; we can add your Green Street deal-tracker data ad hoc as you provide it.</div>
+  </section>
+
+  <!-- ================= RATES ================= -->
+  <section class="view" id="rates">
+    <div class="sec-head"><span class="no">01</span><h2>Policy</h2><div class="rule"></div><span class="note">stance into September</span></div>
+    <div class="tile-row">
+      <div class="tile"><div class="lab">Fed Funds</div><div class="val">3.75–4.00%<span style="font-size:12px"></span></div><div class="sub">Raised 25bp · effective 17 Sep</div></div>
+      <div class="tile"><div class="lab">ECB Deposit</div><div class="val">2.50%<span style="font-size:12px"></span></div><div class="sub down">Raised 25bp · effective 16 Sep</div></div>
+      <div class="tile"><div class="lab">BoE Bank Rate</div><div class="val">3.75%<span style="font-size:12px"></span></div><div class="sub">Held 6–3 · 3 wanted +25bp</div></div>
+    </div>
+
+    <div class="sec-head"><span class="no">02</span><h2>EURIBOR · €STR — term &amp; swaps</h2><div class="rule"></div></div>
+    <div class="panel"><table class="q">
+      <tr><th class="name">EUR benchmark</th><th>3M</th><th>12M</th><th>2Y swap</th><th>5Y swap</th></tr>
+      <tr><td class="name">EURIBOR</td><td>2.621</td><td>2.369</td><td>3.39</td><td>3.45</td></tr>
+      <tr><td class="name">€STR (OIS)</td><td>2.439</td><td>—</td><td>3.08</td><td>3.15</td></tr>
+    </table></div>
+
+    <div class="sec-head"><span class="no">03</span><h2>SONIA — term &amp; swaps</h2><div class="rule"></div></div>
+    <div class="panel"><table class="q">
+      <tr><th class="name">GBP benchmark</th><th>O/N</th><th>3M*</th><th>12M*</th><th>2Y swap</th><th>5Y swap</th></tr>
+      <tr><td class="name">SONIA</td><td>3.730</td><td>3.75*</td><td>3.86*</td><td>4.65</td><td>4.81</td></tr>
+    </table></div>
+
+    <div class="sec-head"><span class="no">04</span><h2>3-Month Forward Curves</h2><div class="rule"></div><span class="note">market-implied · indicative</span></div>
+    <div class="grid2">
+      <div class="panel curve">
+        <div class="top"><h3>3M EURIBOR fwd</h3><span class="tag">market-implied</span></div>
+        <svg viewBox="0 0 260 132" xmlns="http://www.w3.org/2000/svg"><g stroke="#1B2536" stroke-width="1"><line x1="34" y1="104.0" x2="246" y2="104.0"/><line x1="34" y1="64.0" x2="246" y2="64.0"/><line x1="34" y1="24.0" x2="246" y2="24.0"/></g><g font-family="IBM Plex Mono, monospace" font-size="8" fill="#616C80"><text x="4" y="27.0">3.1</text><text x="4" y="67.0">2.7</text><text x="4" y="107.0">2.3</text></g><defs><linearGradient id="fg266" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#E8A13A" stop-opacity="0.5"/><stop offset="1" stop-color="#E8A13A" stop-opacity="0"/></linearGradient></defs><path d="M34.0,68.0 L34.0,68.0 L87.0,33.0 L140.0,19.0 L193.0,13.0 L246.0,8.0 L246.0,110 L34.0,110 Z" fill="url(#fg266)" opacity="0.3"/><path d="M34.0,68.0 L87.0,33.0 L140.0,19.0 L193.0,13.0 L246.0,8.0" fill="none" stroke="#E8A13A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><g font-family="IBM Plex Mono, monospace"><circle cx="34.0" cy="68.0" r="3" fill="#0A0E17" stroke="#E8A13A" stroke-width="1.8"/><text x="34.0" y="120" fill="#7E889B" font-size="8.5" text-anchor="middle">spot</text><circle cx="87.0" cy="33.0" r="3" fill="#0A0E17" stroke="#E8A13A" stroke-width="1.8"/><text x="87.0" y="120" fill="#7E889B" font-size="8.5" text-anchor="middle">+1y</text><circle cx="140.0" cy="19.0" r="3" fill="#0A0E17" stroke="#E8A13A" stroke-width="1.8"/><text x="140.0" y="120" fill="#7E889B" font-size="8.5" text-anchor="middle">+2y</text><circle cx="193.0" cy="13.0" r="3" fill="#0A0E17" stroke="#E8A13A" stroke-width="1.8"/><text x="193.0" y="120" fill="#7E889B" font-size="8.5" text-anchor="middle">+3y</text><circle cx="246.0" cy="8.0" r="3" fill="#0A0E17" stroke="#E8A13A" stroke-width="1.8"/><text x="246.0" y="120" fill="#7E889B" font-size="8.5" text-anchor="middle">+5y</text><text x="34.0" y="62.0" fill="#EAE7DF" font-size="8.5" text-anchor="middle">2.62</text><text x="87.0" y="27.0" fill="#EAE7DF" font-size="8.5" text-anchor="middle">3.01</text><text x="140.0" y="13.0" fill="#EAE7DF" font-size="8.5" text-anchor="middle">3.15</text><text x="193.0" y="7.0" fill="#EAE7DF" font-size="8.5" text-anchor="middle">3.21</text><text x="246.0" y="2.0" fill="#EAE7DF" font-size="8.5" text-anchor="middle">3.48</text></g></svg>
+        <div class="foot">Spot 3M EURIBOR <b>2.621%</b>; 2Y EUR IRS <b>3.390%</b>; 5Y EUR IRS <b>3.450%</b>. Forward shape remains indicative.</div>
+      </div>
+      <div class="panel curve">
+        <div class="top"><h3>3M SONIA fwd</h3><span class="tag">BoE hike priced</span></div>
+        <svg viewBox="0 0 260 132" xmlns="http://www.w3.org/2000/svg"><g stroke="#1B2536" stroke-width="1"><line x1="34" y1="104.0" x2="246" y2="104.0"/><line x1="34" y1="64.0" x2="246" y2="64.0"/><line x1="34" y1="24.0" x2="246" y2="24.0"/></g><g font-family="IBM Plex Mono, monospace" font-size="8" fill="#616C80"><text x="4" y="27.0">4.6</text><text x="4" y="67.0">4.0</text><text x="4" y="107.0">3.5</text></g><defs><linearGradient id="fg391" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#E8A13A" stop-opacity="0.5"/><stop offset="1" stop-color="#E8A13A" stop-opacity="0"/></linearGradient></defs><path d="M34.0,74.2 L34.0,74.2 L87.0,37.8 L140.0,21.8 L193.0,16.0 L246.0,13.1 L246.0,110 L34.0,110 Z" fill="url(#fg391)" opacity="0.3"/><path d="M34.0,74.2 L87.0,37.8 L140.0,21.8 L193.0,16.0 L246.0,13.1" fill="none" stroke="#E8A13A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><g font-family="IBM Plex Mono, monospace"><circle cx="34.0" cy="74.2" r="3" fill="#0A0E17" stroke="#E8A13A" stroke-width="1.8"/><text x="34.0" y="120" fill="#7E889B" font-size="8.5" text-anchor="middle">spot</text><circle cx="87.0" cy="37.8" r="3" fill="#0A0E17" stroke="#E8A13A" stroke-width="1.8"/><text x="87.0" y="120" fill="#7E889B" font-size="8.5" text-anchor="middle">+1y</text><circle cx="140.0" cy="21.8" r="3" fill="#0A0E17" stroke="#E8A13A" stroke-width="1.8"/><text x="140.0" y="120" fill="#7E889B" font-size="8.5" text-anchor="middle">+2y</text><circle cx="193.0" cy="16.0" r="3" fill="#0A0E17" stroke="#E8A13A" stroke-width="1.8"/><text x="193.0" y="120" fill="#7E889B" font-size="8.5" text-anchor="middle">+3y</text><circle cx="246.0" cy="13.1" r="3" fill="#0A0E17" stroke="#E8A13A" stroke-width="1.8"/><text x="246.0" y="120" fill="#7E889B" font-size="8.5" text-anchor="middle">+5y</text><text x="34.0" y="68.2" fill="#EAE7DF" font-size="8.5" text-anchor="middle">3.91</text><text x="87.0" y="31.8" fill="#EAE7DF" font-size="8.5" text-anchor="middle">4.41</text><text x="140.0" y="15.8" fill="#EAE7DF" font-size="8.5" text-anchor="middle">4.63</text><text x="193.0" y="10.0" fill="#EAE7DF" font-size="8.5" text-anchor="middle" >4.92</text><text x="246.0" y="7.1" fill="#EAE7DF" font-size="8.5" text-anchor="middle">4.94</text></g></svg>
+        <div class="foot">SONIA fixing <b>3.7302%</b>; 3M compounded <b>3.75%</b>*; 12M <b>3.86%</b>*; 2Y SONIA swap <b>4.65%</b>; 5Y <b>4.81%</b>.</div>
+      </div>
+    </div>
+
+    <div class="sec-head"><span class="no">05</span><h2>Sovereign 10Y — risk-free reference</h2><div class="rule"></div><span class="note">29 Sep 2026 · latest verified closes</span></div>
+    <div class="sov"><div class="s"><div class="c">Germany</div><div class="v">3.62</div></div><div class="s"><div class="c">Netherlands</div><div class="v">3.71</div></div><div class="s"><div class="c">Ireland</div><div class="v">3.73</div></div><div class="s"><div class="c">Austria</div><div class="v">3.83</div></div><div class="s"><div class="c">Portugal</div><div class="v">4.02</div></div><div class="s"><div class="c">Spain</div><div class="v">4.12</div></div><div class="s"><div class="c">Belgium</div><div class="v">4.31</div></div><div class="s"><div class="c">Greece</div><div class="v">4.44</div></div><div class="s"><div class="c">Italy</div><div class="v">4.57</div></div><div class="s"><div class="c">France</div><div class="v">4.74</div></div><div class="s"><div class="c">Norway</div><div class="v">4.69</div></div><div class="s"><div class="c">Czech</div><div class="v">5.36</div></div><div class="s"><div class="c">Denmark</div><div class="v">3.45</div></div><div class="s"><div class="c">Sweden</div><div class="v">3.27</div></div><div class="s"><div class="c">Poland</div><div class="v">6.45</div></div><div class="s"><div class="c">Hungary</div><div class="v">5.95</div></div><div class="s"><div class="c">UK</div><div class="v">5.39</div></div></div>
+    <div class="rp-note">Feeds the <b>Risk Premia</b> tab: each city's prime yield is measured against its own sovereign 10Y (or the 5Y swap as a debt-cost proxy).</div>
+  </section>
+
+  <!-- ================= RISK PREMIA ================= -->
+  <section class="view" id="rp">
+    <div class="sec-head"><span class="no">01</span><h2>Prime Yield vs Risk-Free</h2><div class="rule"></div><span class="note">prime yields Sep-2026 · sovereigns latest verified through 13 Oct 2026 · local swaps latest verified through 13 Oct 2026</span></div>
+    <div class="rp-controls">
+      <div class="grp"><span class="glab">Asset class</span><div class="btns" id="acBtns"></div></div>
+      <div class="grp"><span class="glab">Risk-free basis</span><div class="btns" id="basisBtns">
+        <button data-b="10" class="on">10Y sovereign</button><button data-b="5">5Y swap</button><button data-b="peak">Peak market</button>
+      </div></div>
+    </div>
+    <div class="panel" style="padding:16px 16px 18px">
+      <div id="rpBars"></div>
+    </div>
+    <div class="rp-note" id="rpNote"></div>
+  </section>
+
+  <footer>
+    <b>Sources:</b> Reuters, U.S. Treasury, Federal Reserve, ECB, Investing.com, countryeconomy.com, BlueGamma / Investing.com · property yields from September 2026 Yields.xlsx; sovereign yields verified via current market sources; EURIBOR fixings via Euriborrate.com; €STR via ECB; SONIA and swaps via BlueGamma / Bank of England; local-currency swaps via BlueGamma where available.<br>
+    <b>Notes:</b> * indicates compounded or market-derived values where an official same-day fixing was not yet available. Forward curves are indicative. Risk premium = prime property yield − risk-free rate. Peak spread = current September prime yield − historical peak yield from the September schedule. The property-yield dataset is the September 2026 monthly schedule provided for this update. Sovereign references use 13 Oct 2026 market readings where available; EURIBOR fixings use the latest publicly available fixing (publication lag); EUR 5Y and GBP 5Y swaps use the latest BlueGamma market readings available for 13 Oct; €STR uses the latest ECB-published fixing; SONIA uses the latest published fixing. Not investment advice.
+  </footer>
+</div>
+
+
+<script>/* Leaflet is loaded safely by initTxn with CDN fallbacks. */</script>
+<script>
+const RP = {"assetClasses":["Office","Residential (Multifamily)","Student Housing (PBSA)","Logistics","Retail - High St","Retail - Warehouse / Park","Hotel - Lease","Hotel - Management Contract"],"records":[{"ac":"Office","country":"Austria","city":"Vienna","y":4.75,"peak":3.15,"peakSpread":160.0,"ccy":"EUR","rfr10":3.7,"rfr5":3.45,"spr10":105,"spr5":126},{"ac":"Office","country":"Czech Republic","city":"Prague","y":5.1,"peak":4.25,"peakSpread":85.0,"ccy":"CZK","rfr10":5.37,"rfr5":4.98,"spr10":-27,"spr5":12},{"ac":"Office","country":"Denmark","city":"Copenhagen","y":4.25,"peak":3.4,"peakSpread":85.0,"ccy":"DKK","rfr10":3.26,"rfr5":3.83,"spr10":99,"spr5":42},{"ac":"Office","country":"France","city":"Paris Ile-de-France","y":4.5,"peak":2.6,"peakSpread":190.0,"ccy":"EUR","rfr10":4.84,"rfr5":3.45,"spr10":-34,"spr5":101},{"ac":"Office","country":"Germany","city":"Munich","y":4.4,"peak":2.5,"peakSpread":190.0,"ccy":"EUR","rfr10":3.43,"rfr5":3.45,"spr10":97,"spr5":91},{"ac":"Office","country":"Ireland","city":"Dublin","y":4.75,"peak":4.0,"peakSpread":75.0,"ccy":"EUR","rfr10":3.57,"rfr5":3.45,"spr10":118,"spr5":126},{"ac":"Office","country":"Italy","city":"Milan","y":4.1,"peak":2.9,"peakSpread":120.0,"ccy":"EUR","rfr10":4.53,"rfr5":3.45,"spr10":-43,"spr5":61},{"ac":"Office","country":"Netherlands","city":"Amsterdam","y":4.7,"peak":3.0,"peakSpread":170.0,"ccy":"EUR","rfr10":3.54,"rfr5":3.45,"spr10":116,"spr5":121},{"ac":"Office","country":"Poland","city":"Warsaw","y":5.9,"peak":4.4,"peakSpread":150.0,"ccy":"PLN","rfr10":6.38,"rfr5":5.0,"spr10":-48,"spr5":90},{"ac":"Office","country":"Portugal","city":"Lisbon","y":5.0,"peak":4.0,"peakSpread":100.0,"ccy":"EUR","rfr10":3.93,"rfr5":3.45,"spr10":107,"spr5":151},{"ac":"Office","country":"Portugal","city":"Porto","y":6.5,"peak":5.75,"peakSpread":75.0,"ccy":"EUR","rfr10":3.93,"rfr5":3.45,"spr10":257,"spr5":301},{"ac":"Office","country":"Spain","city":"Madrid","y":4.5,"peak":3.25,"peakSpread":125.0,"ccy":"EUR","rfr10":4.05,"rfr5":3.45,"spr10":45,"spr5":101},{"ac":"Office","country":"Sweden","city":"Stockholm","y":3.9,"peak":3.15,"peakSpread":75.0,"ccy":"SEK","rfr10":3.16,"rfr5":3.23,"spr10":74,"spr5":67},{"ac":"Office","country":"United Kingdom","city":"London - Central (West End)","y":4.15,"peak":3.25,"peakSpread":90.0,"ccy":"GBP","rfr10":5.38,"rfr5":4.81,"spr10":-123,"spr5":-66},{"ac":"Office","country":"United Kingdom","city":"London - Central (City)","y":5.65,"peak":3.75,"peakSpread":190.0,"ccy":"GBP","rfr10":5.38,"rfr5":4.81,"spr10":27,"spr5":84},{"ac":"Residential (Multifamily)","country":"Austria","city":"Vienna","y":4.1,"peak":2.75,"peakSpread":135.0,"ccy":"EUR","rfr10":3.7,"rfr5":3.45,"spr10":40,"spr5":61},{"ac":"Residential (Multifamily)","country":"Denmark","city":"Copenhagen","y":3.5,"peak":2.8,"peakSpread":70.0,"ccy":"DKK","rfr10":3.26,"rfr5":3.83,"spr10":24,"spr5":-33},{"ac":"Residential (Multifamily)","country":"France","city":"Paris Ile-de-France","y":3.6,"peak":2.1,"peakSpread":150.0,"ccy":"EUR","rfr10":4.84,"rfr5":3.45,"spr10":-124,"spr5":11},{"ac":"Residential (Multifamily)","country":"Germany","city":"Berlin","y":3.55,"peak":2.1,"peakSpread":145.0,"ccy":"EUR","rfr10":3.43,"rfr5":3.45,"spr10":12,"spr5":6},{"ac":"Residential (Multifamily)","country":"Ireland","city":"Dublin","y":4.75,"peak":3.6,"peakSpread":115.0,"ccy":"EUR","rfr10":3.57,"rfr5":3.45,"spr10":118,"spr5":126},{"ac":"Residential (Multifamily)","country":"Italy","city":"Milan","y":4.4,"peak":3.75,"peakSpread":65.0,"ccy":"EUR","rfr10":4.53,"rfr5":3.45,"spr10":-13,"spr5":91},{"ac":"Residential (Multifamily)","country":"Netherlands","city":"Amsterdam","y":3.6,"peak":2.7,"peakSpread":90.0,"ccy":"EUR","rfr10":3.54,"rfr5":3.45,"spr10":6,"spr5":11},{"ac":"Residential (Multifamily)","country":"Poland","city":"Warsaw","y":5.25,"peak":4.5,"peakSpread":75.0,"ccy":"PLN","rfr10":6.38,"rfr5":5.0,"spr10":-113,"spr5":25},{"ac":"Residential (Multifamily)","country":"Portugal","city":"Lisbon","y":4.5,"peak":4.0,"peakSpread":50.0,"ccy":"EUR","rfr10":3.93,"rfr5":3.45,"spr10":57,"spr5":101},{"ac":"Residential (Multifamily)","country":"Spain","city":"Madrid","y":3.8,"peak":3.0,"peakSpread":80.0,"ccy":"EUR","rfr10":4.05,"rfr5":3.45,"spr10":-25,"spr5":31},{"ac":"Residential (Multifamily)","country":"Sweden","city":"Stockholm","y":3.85,"peak":3.0,"peakSpread":85.0,"ccy":"SEK","rfr10":3.16,"rfr5":3.23,"spr10":69,"spr5":62},{"ac":"Residential (Multifamily)","country":"United Kingdom","city":"London - Central (Zone 1-2)","y":4.25,"peak":3.25,"peakSpread":100.0,"ccy":"GBP","rfr10":5.38,"rfr5":4.81,"spr10":-113,"spr5":-56},{"ac":"Student Housing (PBSA)","country":"Austria","city":"Vienna","y":4.9,"peak":4.1,"peakSpread":80.0,"ccy":"EUR","rfr10":3.7,"rfr5":3.45,"spr10":120,"spr5":141},{"ac":"Student Housing (PBSA)","country":"Denmark","city":"Copenhagen","y":4.2,"peak":3.25,"peakSpread":95.0,"ccy":"DKK","rfr10":3.26,"rfr5":3.83,"spr10":94,"spr5":37},{"ac":"Student Housing (PBSA)","country":"France","city":"Paris Ile-de-France","y":4.2,"peak":3.3,"peakSpread":90.0,"ccy":"EUR","rfr10":4.84,"rfr5":3.45,"spr10":-64,"spr5":71},{"ac":"Student Housing (PBSA)","country":"Ireland","city":"Dublin","y":5.25,"peak":4.5,"peakSpread":75.0,"ccy":"EUR","rfr10":3.57,"rfr5":3.45,"spr10":168,"spr5":176},{"ac":"Student Housing (PBSA)","country":"Netherlands","city":"Amsterdam","y":4.2,"peak":3.6,"peakSpread":60.0,"ccy":"EUR","rfr10":3.54,"rfr5":3.45,"spr10":66,"spr5":71},{"ac":"Student Housing (PBSA)","country":"Poland","city":"Warsaw","y":6.35,"peak":5.5,"peakSpread":85.0,"ccy":"PLN","rfr10":6.38,"rfr5":5.0,"spr10":-3,"spr5":135},{"ac":"Student Housing (PBSA)","country":"Portugal","city":"Porto","y":5.75,"peak":5.5,"peakSpread":25.0,"ccy":"EUR","rfr10":3.93,"rfr5":3.45,"spr10":182,"spr5":226},{"ac":"Student Housing (PBSA)","country":"Spain","city":"Madrid","y":4.5,"peak":4.5,"peakSpread":0.0,"ccy":"EUR","rfr10":4.05,"rfr5":3.45,"spr10":45,"spr5":101},{"ac":"Student Housing (PBSA)","country":"United Kingdom","city":"London - Central","y":4.8,"peak":3.5,"peakSpread":130.0,"ccy":"GBP","rfr10":5.38,"rfr5":4.81,"spr10":-58,"spr5":-1},{"ac":"Logistics","country":"Austria","city":"Vienna","y":5.25,"peak":3.7,"peakSpread":155.0,"ccy":"EUR","rfr10":3.7,"rfr5":3.45,"spr10":155,"spr5":176},{"ac":"Logistics","country":"Czech Republic","city":"Prague","y":5.15,"peak":4.0,"peakSpread":115.0,"ccy":"CZK","rfr10":5.37,"rfr5":4.98,"spr10":-22,"spr5":17},{"ac":"Logistics","country":"Denmark","city":"National","y":5.0,"peak":3.9,"peakSpread":110.0,"ccy":"DKK","rfr10":3.26,"rfr5":3.83,"spr10":174,"spr5":117},{"ac":"Logistics","country":"France","city":"Paris Ile-de-France","y":5.25,"peak":3.25,"peakSpread":200.0,"ccy":"EUR","rfr10":4.84,"rfr5":3.45,"spr10":41,"spr5":176},{"ac":"Logistics","country":"Germany","city":"Munich","y":4.5,"peak":3.0,"peakSpread":150.0,"ccy":"EUR","rfr10":3.43,"rfr5":3.45,"spr10":107,"spr5":101},{"ac":"Logistics","country":"Ireland","city":"Dublin","y":5.0,"peak":4.0,"peakSpread":100.0,"ccy":"EUR","rfr10":3.57,"rfr5":3.45,"spr10":143,"spr5":151},{"ac":"Logistics","country":"Italy","city":"National","y":5.25,"peak":3.8,"peakSpread":145.0,"ccy":"EUR","rfr10":4.53,"rfr5":3.45,"spr10":72,"spr5":176},{"ac":"Logistics","country":"Netherlands","city":"National","y":4.8,"peak":3.1,"peakSpread":170.0,"ccy":"EUR","rfr10":3.54,"rfr5":3.45,"spr10":126,"spr5":131},{"ac":"Logistics","country":"Poland","city":"Warsaw","y":6.35,"peak":4.35,"peakSpread":200.0,"ccy":"PLN","rfr10":6.38,"rfr5":5.0,"spr10":-3,"spr5":135},{"ac":"Logistics","country":"Portugal","city":"Porto","y":5.75,"peak":5.0,"peakSpread":75.0,"ccy":"EUR","rfr10":3.93,"rfr5":3.45,"spr10":182,"spr5":226},{"ac":"Logistics","country":"Spain","city":"Madrid","y":4.85,"peak":3.9,"peakSpread":95.0,"ccy":"EUR","rfr10":4.05,"rfr5":3.45,"spr10":80,"spr5":136},{"ac":"Logistics","country":"Sweden","city":"Stockholm","y":4.9,"peak":3.4,"peakSpread":150.0,"ccy":"SEK","rfr10":3.16,"rfr5":3.23,"spr10":174,"spr5":167},{"ac":"Logistics","country":"United Kingdom","city":"Major Regional","y":5.5,"peak":3.25,"peakSpread":225.0,"ccy":"GBP","rfr10":5.38,"rfr5":4.81,"spr10":12,"spr5":69},{"ac":"Retail - High St","country":"Austria","city":"Vienna","y":4.75,"peak":3.3,"peakSpread":145.0,"ccy":"EUR","rfr10":3.7,"rfr5":3.45,"spr10":105,"spr5":126},{"ac":"Retail - High St","country":"Czech Republic","city":"Prague","y":4.5,"peak":4.25,"peakSpread":25.0,"ccy":"CZK","rfr10":5.37,"rfr5":4.98,"spr10":-87,"spr5":-48},{"ac":"Retail - High St","country":"Denmark","city":"Copenhagen","y":4.5,"peak":3.05,"peakSpread":145.0,"ccy":"DKK","rfr10":3.26,"rfr5":3.83,"spr10":124,"spr5":67},{"ac":"Retail - High St","country":"France","city":"Paris Ile-de-France","y":4.5,"peak":3.0,"peakSpread":150.0,"ccy":"EUR","rfr10":4.84,"rfr5":3.45,"spr10":-34,"spr5":101},{"ac":"Retail - High St","country":"Germany","city":"Munich","y":4.0,"peak":2.75,"peakSpread":125.0,"ccy":"EUR","rfr10":3.43,"rfr5":3.45,"spr10":57,"spr5":51},{"ac":"Retail - High St","country":"Ireland","city":"Dublin","y":5.25,"peak":4.5,"peakSpread":75.0,"ccy":"EUR","rfr10":3.57,"rfr5":3.45,"spr10":168,"spr5":176},{"ac":"Retail - High St","country":"Italy","city":"Italy (Key City)","y":3.95,"peak":3.1,"peakSpread":85.0,"ccy":"EUR","rfr10":4.53,"rfr5":3.45,"spr10":-58,"spr5":46},{"ac":"Retail - High St","country":"Netherlands","city":"Amsterdam","y":3.75,"peak":3.3,"peakSpread":45.0,"ccy":"EUR","rfr10":3.54,"rfr5":3.45,"spr10":21,"spr5":26},{"ac":"Retail - High St","country":"Portugal","city":"Lisbon","y":4.0,"peak":4.0,"peakSpread":0.0,"ccy":"EUR","rfr10":3.93,"rfr5":3.45,"spr10":7,"spr5":51},{"ac":"Retail - High St","country":"Spain","city":"Madrid","y":3.75,"peak":3.25,"peakSpread":50.0,"ccy":"EUR","rfr10":4.05,"rfr5":3.45,"spr10":-30,"spr5":26},{"ac":"Retail - High St","country":"Sweden","city":"Stockholm","y":4.25,"peak":3.5,"peakSpread":75.0,"ccy":"SEK","rfr10":3.16,"rfr5":3.23,"spr10":109,"spr5":102},{"ac":"Retail - High St","country":"United Kingdom","city":"Major Regional","y":6.5,"peak":6.25,"peakSpread":25.0,"ccy":"GBP","rfr10":5.38,"rfr5":4.81,"spr10":112,"spr5":169},{"ac":"Retail - Warehouse / Park","country":"Austria","city":"Vienna","y":5.75,"peak":4.9,"peakSpread":85.0,"ccy":"EUR","rfr10":3.7,"rfr5":3.45,"spr10":205,"spr5":226},{"ac":"Retail - Warehouse / Park","country":"Czech Republic","city":"Prague","y":6.1,"peak":6.0,"peakSpread":10.0,"ccy":"CZK","rfr10":5.37,"rfr5":4.98,"spr10":73,"spr5":112},{"ac":"Retail - Warehouse / Park","country":"Denmark","city":"National","y":6.2,"peak":5.6,"peakSpread":60.0,"ccy":"DKK","rfr10":3.26,"rfr5":3.83,"spr10":294,"spr5":237},{"ac":"Retail - Warehouse / Park","country":"France","city":"Paris Ile-de-France","y":5.6,"peak":5.0,"peakSpread":60.0,"ccy":"EUR","rfr10":4.84,"rfr5":3.45,"spr10":76,"spr5":211},{"ac":"Retail - Warehouse / Park","country":"Germany","city":"National","y":4.9,"peak":3.6,"peakSpread":130.0,"ccy":"EUR","rfr10":3.43,"rfr5":3.45,"spr10":147,"spr5":141},{"ac":"Retail - Warehouse / Park","country":"Ireland","city":"Dublin","y":6.0,"peak":5.75,"peakSpread":25.0,"ccy":"EUR","rfr10":3.57,"rfr5":3.45,"spr10":243,"spr5":251},{"ac":"Retail - Warehouse / Park","country":"Italy","city":"National","y":7.0,"peak":6.4,"peakSpread":60.0,"ccy":"EUR","rfr10":4.53,"rfr5":3.45,"spr10":247,"spr5":351},{"ac":"Retail - Warehouse / Park","country":"Netherlands","city":"National","y":6.25,"peak":5.7,"peakSpread":55.0,"ccy":"EUR","rfr10":3.54,"rfr5":3.45,"spr10":271,"spr5":276},{"ac":"Retail - Warehouse / Park","country":"Portugal","city":"Lisbon","y":6.25,"peak":6.25,"peakSpread":0.0,"ccy":"EUR","rfr10":3.93,"rfr5":3.45,"spr10":232,"spr5":276},{"ac":"Retail - Warehouse / Park","country":"Spain","city":"National","y":6.5,"peak":5.5,"peakSpread":100.0,"ccy":"EUR","rfr10":4.05,"rfr5":3.45,"spr10":245,"spr5":301},{"ac":"Retail - Warehouse / Park","country":"Sweden","city":"National","y":5.5,"peak":5.0,"peakSpread":50.0,"ccy":"SEK","rfr10":3.16,"rfr5":3.23,"spr10":234,"spr5":227},{"ac":"Retail - Warehouse / Park","country":"United Kingdom","city":"Major Regional","y":5.75,"peak":4.75,"peakSpread":100.0,"ccy":"GBP","rfr10":5.38,"rfr5":4.81,"spr10":37,"spr5":94},{"ac":"Hotel - Lease","country":"Austria","city":"Vienna","y":5.4,"peak":3.75,"peakSpread":165.0,"ccy":"EUR","rfr10":3.7,"rfr5":3.45,"spr10":170,"spr5":191},{"ac":"Hotel - Lease","country":"Czech Republic","city":"Prague","y":6.2,"peak":4.5,"peakSpread":170.0,"ccy":"CZK","rfr10":5.37,"rfr5":4.98,"spr10":83,"spr5":122},{"ac":"Hotel - Lease","country":"Denmark","city":"Copenhagen","y":4.7,"peak":4.25,"peakSpread":45.0,"ccy":"DKK","rfr10":3.26,"rfr5":3.83,"spr10":144,"spr5":87},{"ac":"Hotel - Lease","country":"France","city":"Paris Ile-de-France","y":5.0,"peak":4.0,"peakSpread":100.0,"ccy":"EUR","rfr10":4.84,"rfr5":3.45,"spr10":16,"spr5":151},{"ac":"Hotel - Lease","country":"Germany","city":"National","y":5.25,"peak":3.75,"peakSpread":150.0,"ccy":"EUR","rfr10":3.43,"rfr5":3.45,"spr10":182,"spr5":176},{"ac":"Hotel - Lease","country":"Greece","city":"Athens","y":7.0,"peak":6.5,"peakSpread":50.0,"ccy":"EUR","rfr10":4.37,"rfr5":3.45,"spr10":263,"spr5":351},{"ac":"Hotel - Lease","country":"Greece","city":"Prime Greek Islands","y":6.5,"peak":6.25,"peakSpread":25.0,"ccy":"EUR","rfr10":4.37,"rfr5":3.45,"spr10":213,"spr5":301},{"ac":"Hotel - Lease","country":"Ireland","city":"Dublin","y":4.75,"peak":4.0,"peakSpread":75.0,"ccy":"EUR","rfr10":3.57,"rfr5":3.45,"spr10":118,"spr5":126},{"ac":"Hotel - Lease","country":"Italy","city":"Milan","y":5.0,"peak":4.5,"peakSpread":50.0,"ccy":"EUR","rfr10":4.53,"rfr5":3.45,"spr10":47,"spr5":151},{"ac":"Hotel - Lease","country":"Italy","city":"Rome","y":5.0,"peak":4.5,"peakSpread":50.0,"ccy":"EUR","rfr10":4.53,"rfr5":3.45,"spr10":47,"spr5":151},{"ac":"Hotel - Lease","country":"Netherlands","city":"Amsterdam","y":5.25,"peak":4.25,"peakSpread":100.0,"ccy":"EUR","rfr10":3.54,"rfr5":3.45,"spr10":171,"spr5":176},{"ac":"Hotel - Lease","country":"Norway","city":"Oslo","y":5.25,"peak":4.25,"peakSpread":100.0,"ccy":"NOK","rfr10":4.6,"rfr5":4.94,"spr10":65,"spr5":31},{"ac":"Hotel - Lease","country":"Portugal","city":"Lisbon","y":5.5,"peak":4.75,"peakSpread":75.0,"ccy":"EUR","rfr10":3.93,"rfr5":3.45,"spr10":157,"spr5":201},{"ac":"Hotel - Lease","country":"Portugal","city":"Porto","y":5.75,"peak":5.25,"peakSpread":50.0,"ccy":"EUR","rfr10":3.93,"rfr5":3.45,"spr10":182,"spr5":226},{"ac":"Hotel - Lease","country":"Spain","city":"Barcelona","y":5.0,"peak":4.25,"peakSpread":75.0,"ccy":"EUR","rfr10":4.05,"rfr5":3.45,"spr10":95,"spr5":151},{"ac":"Hotel - Lease","country":"Spain","city":"Madrid","y":5.0,"peak":4.25,"peakSpread":75.0,"ccy":"EUR","rfr10":4.05,"rfr5":3.45,"spr10":95,"spr5":151},{"ac":"Hotel - Lease","country":"Spain","city":"Spanish Islands","y":6.0,"peak":5.25,"peakSpread":75.0,"ccy":"EUR","rfr10":4.05,"rfr5":3.45,"spr10":195,"spr5":251},{"ac":"Hotel - Lease","country":"Sweden","city":"Stockholm","y":4.75,"peak":3.75,"peakSpread":100.0,"ccy":"SEK","rfr10":3.16,"rfr5":3.23,"spr10":159,"spr5":152},{"ac":"Hotel - Lease","country":"United Kingdom","city":"London - Central","y":4.5,"peak":3.75,"peakSpread":75.0,"ccy":"GBP","rfr10":5.38,"rfr5":4.81,"spr10":-88,"spr5":-31},{"ac":"Hotel - Management Contract","country":"Austria","city":"Vienna","y":6.6,"peak":4.75,"peakSpread":185.0,"ccy":"EUR","rfr10":3.7,"rfr5":3.45,"spr10":290,"spr5":311},{"ac":"Hotel - Management Contract","country":"Czech Republic","city":"Prague","y":6.95,"peak":5.25,"peakSpread":170.0,"ccy":"CZK","rfr10":5.37,"rfr5":4.98,"spr10":158,"spr5":197},{"ac":"Hotel - Management Contract","country":"Denmark","city":"Copenhagen","y":6.9,"peak":6.55,"peakSpread":35.0,"ccy":"DKK","rfr10":3.26,"rfr5":3.83,"spr10":364,"spr5":307},{"ac":"Hotel - Management Contract","country":"France","city":"Paris Ile-de-France","y":6.0,"peak":5.25,"peakSpread":75.0,"ccy":"EUR","rfr10":4.84,"rfr5":3.45,"spr10":116,"spr5":251},{"ac":"Hotel - Management Contract","country":"Germany","city":"National","y":6.4,"peak":4.75,"peakSpread":165.0,"ccy":"EUR","rfr10":3.43,"rfr5":3.45,"spr10":297,"spr5":291},{"ac":"Hotel - Management Contract","country":"Greece","city":"Athens","y":7.75,"peak":7.25,"peakSpread":50.0,"ccy":"EUR","rfr10":4.37,"rfr5":3.45,"spr10":338,"spr5":426},{"ac":"Hotel - Management Contract","country":"Greece","city":"Prime Greek Islands","y":7.25,"peak":7.0,"peakSpread":25.0,"ccy":"EUR","rfr10":4.37,"rfr5":3.45,"spr10":288,"spr5":376},{"ac":"Hotel - Management Contract","country":"Ireland","city":"Dublin","y":6.75,"peak":6.25,"peakSpread":50.0,"ccy":"EUR","rfr10":3.57,"rfr5":3.45,"spr10":318,"spr5":326},{"ac":"Hotel - Management Contract","country":"Italy","city":"Milan","y":6.0,"peak":6.0,"peakSpread":0.0,"ccy":"EUR","rfr10":4.53,"rfr5":3.45,"spr10":147,"spr5":251},{"ac":"Hotel - Management Contract","country":"Italy","city":"Rome","y":6.0,"peak":6.0,"peakSpread":0.0,"ccy":"EUR","rfr10":4.53,"rfr5":3.45,"spr10":147,"spr5":251},{"ac":"Hotel - Management Contract","country":"Netherlands","city":"Amsterdam","y":6.5,"peak":5.5,"peakSpread":100.0,"ccy":"EUR","rfr10":3.54,"rfr5":3.45,"spr10":296,"spr5":301},{"ac":"Hotel - Management Contract","country":"Norway","city":"Oslo","y":0.0,"peak":6.75,"peakSpread":-675.0,"ccy":"NOK","rfr10":4.6,"rfr5":4.94,"spr10":-460,"spr5":-494},{"ac":"Hotel - Management Contract","country":"Portugal","city":"Lisbon","y":6.25,"peak":5.75,"peakSpread":50.0,"ccy":"EUR","rfr10":3.93,"rfr5":3.45,"spr10":232,"spr5":276},{"ac":"Hotel - Management Contract","country":"Portugal","city":"Porto","y":6.75,"peak":6.25,"peakSpread":50.0,"ccy":"EUR","rfr10":3.93,"rfr5":3.45,"spr10":282,"spr5":326},{"ac":"Hotel - Management Contract","country":"Spain","city":"Barcelona","y":5.75,"peak":5.0,"peakSpread":75.0,"ccy":"EUR","rfr10":4.05,"rfr5":3.45,"spr10":170,"spr5":226},{"ac":"Hotel - Management Contract","country":"Spain","city":"Madrid","y":5.75,"peak":5.0,"peakSpread":75.0,"ccy":"EUR","rfr10":4.05,"rfr5":3.45,"spr10":170,"spr5":226},{"ac":"Hotel - Management Contract","country":"Spain","city":"Spanish Islands","y":6.75,"peak":6.0,"peakSpread":75.0,"ccy":"EUR","rfr10":4.05,"rfr5":3.45,"spr10":270,"spr5":326},{"ac":"Hotel - Management Contract","country":"United Kingdom","city":"London - Central","y":6.25,"peak":5.5,"peakSpread":75.0,"ccy":"GBP","rfr10":5.38,"rfr5":4.81,"spr10":87,"spr5":144}],"swaps":{"EUR":3.45,"CZK":4.98,"DKK":3.83,"GBP":4.81,"HUF":5.57,"NOK":4.94,"PLN":5.0,"SEK":3.23},"rfr10Dates":{"Austria":"13 Oct 2026","Belgium":"13 Oct 2026","Czech Republic":"13 Oct 2026","Denmark":"13 Oct 2026","France":"13 Oct 2026","Germany":"13 Oct 2026","Greece":"13 Oct 2026","Hungary":"13 Oct 2026","Ireland":"13 Oct 2026","Italy":"13 Oct 2026","Netherlands":"13 Oct 2026","Norway":"13 Oct 2026","Poland":"13 Oct 2026","Portugal":"13 Oct 2026","Spain":"13 Oct 2026","Sweden":"13 Oct 2026","United Kingdom":"13 Oct 2026"},"rfr5Dates":{"EUR":"13 Oct 2026","GBP":"12 Oct 2026","CZK":"9 Oct 2026","DKK":"25 Sep 2026","HUF":"9 Oct 2026","NOK":"12 Oct 2026","PLN":"8 Oct 2026","SEK":"12 Oct 2026"}};
+
+// ---------- tabs ----------
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
+  document.querySelectorAll('.view').forEach(x=>x.classList.remove('on'));
+  t.classList.add('on'); document.getElementById(t.dataset.v).classList.add('on');
+});
+
+// ---------- clock ----------
+function tick(){try{document.getElementById('clock').textContent=new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit',timeZone:'Europe/London'})+' BST';}catch(e){document.getElementById('clock').textContent=new Date().toLocaleTimeString();}}
+tick();setInterval(tick,1000);
+
+// ---------- risk premia ----------
+let curAC = RP.assetClasses[0], curBasis='10';
+const acBtns=document.getElementById('acBtns');
+RP.assetClasses.forEach((a,i)=>{const b=document.createElement('button');b.textContent=a.replace(' (Multifamily)','').replace(' (PBSA)','');b.dataset.ac=a;if(i===0)b.classList.add('on');b.onclick=()=>{curAC=a;document.querySelectorAll('#acBtns button').forEach(x=>x.classList.remove('on'));b.classList.add('on');drawRP();};acBtns.appendChild(b);});
+document.querySelectorAll('#basisBtns button').forEach(b=>b.onclick=()=>{curBasis=b.dataset.b;document.querySelectorAll('#basisBtns button').forEach(x=>x.classList.remove('on'));b.classList.add('on');drawRP();});
+
+function drawRP(){
+  const peakMode = curBasis==='peak';
+  const sprKey = peakMode ? 'peakSpread' : (curBasis==='10' ? 'spr10' : 'spr5');
+  const rfKey = curBasis==='10' ? 'rfr10' : 'rfr5';
+  let rows = RP.records.filter(r=>{
+    if(r.ac!==curAC) return false;
+    if(peakMode) return Number.isFinite(Number(r.peak)) && Number.isFinite(Number(r.peakSpread));
+    return Number.isFinite(Number(r.y)) && Number.isFinite(Number(r[rfKey]));
+  });
+  rows = rows.map(r=>{
+    const row={...r};
+    if(!peakMode){
+      row[sprKey]=(Number(r.y)-Number(r[rfKey]))*100;
+    }
+    return row;
+  });
+  rows.sort((a,b)=>Number(b[sprKey])-Number(a[sprKey]));
+  const max = Math.max(...rows.map(r=>Math.abs(Number(r[sprKey]))),1);
+  const host=document.getElementById('rpBars'); host.innerHTML='';
+  rows.forEach(r=>{
+    const div=document.createElement('div');
+    div.className='bar-row rp-row'+(r.city==='Dublin'?' dub':'')+(peakMode?' rp-peak':'');
+    const spread=Number(r[sprKey]);
+    const pos=spread>=0;
+    const w=Math.abs(spread)/max*50;
+    const col = r.city==='Dublin' ? 'var(--amber)' : (peakMode?'var(--teal)':(pos?'var(--up)':'var(--down)'));
+    const val=Number.isFinite(spread) ? spread.toFixed(0) : 'n/a';
+    div.innerHTML =
+      '<div class="cty">'+r.city+' <small>'+r.country.replace('United Kingdom','UK').replace('Czech Republic','CZ').replace('Netherlands','NL')+'</small></div>'+
+      '<div class="bar-track"><div class="bar-zero" style="left:50%"></div>'+        (Number.isFinite(spread)?'<div class="bar-fill" style="'+(pos?'left:50%;':'right:50%;')+'width:'+w+'%;background:'+col+'"></div>':'')+
+      '</div><div class="bar-val" style="color:'+col+'">'+(Number.isFinite(spread)?(pos?'+':'')+val+'bp':'n/a')+'</div>';
+    host.appendChild(div);
+  });
+
+  const dub=rows.find(r=>r.city==='Dublin');
+  const top=rows[0], bot=rows[rows.length-1];
+  let n;
+  if(peakMode){
+    n='<b>'+curAC+'</b> — current September 2026 prime yield versus the historical peak yield in Column E of the September schedule, sorted widest to thinnest. ';
+    if(dub) n+='Dublin (highlighted) is <b>+'+Number(dub.peakSpread).toFixed(0)+'bp</b> wider than peak ('+Number(dub.y).toFixed(2)+'% current vs '+Number(dub.peak).toFixed(2)+'% peak). ';
+    if(top) n+='Widest: <b>'+top.city+' '+(Number(top[sprKey])>=0?'+':'')+Number(top[sprKey]).toFixed(0)+'bp</b>; thinnest: <b>'+bot.city+' '+(Number(bot[sprKey])>=0?'+':'')+Number(bot[sprKey]).toFixed(0)+'bp</b>. ';
+    n+='Positive values mean the current prime yield remains wider than the historical peak yield.';
+  } else {
+    n='<b>'+curAC+'</b> — spread of prime yield over '+(curBasis==='10'?'local 10Y sovereign':'5Y swap (debt-cost proxy)')+', sorted widest to thinnest. ';
+    if(dub){
+      const ds=Number(dub[sprKey]);
+      n+='Dublin (highlighted) sits at <b>'+(ds>=0?'+':'')+ds.toFixed(0)+'bp</b> (prime '+Number(dub.y).toFixed(2)+'% vs RFR '+Number(dub[rfKey]).toFixed(2)+'%). ';
+    }
+    if(top) n+='Widest: <b>'+top.city+' '+(Number(top[sprKey])>=0?'+':'')+Number(top[sprKey]).toFixed(0)+'bp</b>; thinnest: <b>'+bot.city+' '+(Number(bot[sprKey])>=0?'+':'')+Number(bot[sprKey]).toFixed(0)+'bp</b>. ';
+    n+='5Y swap uses the latest local-currency IRS for each country. Negative values mean the risk-free rate exceeds the prime property yield.';
+  }
+  document.getElementById('rpNote').innerHTML=n;
+}
+drawRP();
+
+// ---------- transactions ----------
+const TXN = [
+  {year:2026,sector:'Office',name:'One Molesworth Street',city:'Dublin 2',lat:53.3415,lng:-6.2577,price:110,status:'Completed',yield:'Prime office',buyer:'MEAG',seller:'Henderson Park',date:'27 May 2026',desc:'Prime office + retail investment at the junction of Molesworth Street and Dawson Street. Home to Barclays Irish HQ and The Ivy.',url:'https://www.irishtimes.com/business/2026/05/27/german-investor-pays-110m-for-home-of-the-ivy/'},
+  {year:2026,sector:'Office',name:'The Shipping Office / 20–26 Sir John Rogerson’s Quay',city:'Dublin 2',lat:53.3452,lng:-6.2387,price:160,status:'Completed',yield:'Not reported',buyer:'BNY',seller:'Marlet Property Group',date:'25 Sep 2026',desc:'BNY agreed to acquire its new Irish HQ; market sources estimate €140m–€165m. Grade-A office of c.177,000 sq ft.',url:'https://www.irishtimes.com/business/2026/09/25/bny-buys-its-dublin-docklands-headquarters-for-up-to-165m/'},
+  {year:2026,sector:'Office',name:'Guild Building, Cork Street',city:'Dublin 8',lat:53.3363,lng:-6.2848,price:14,status:'Guide',yield:'8.3% NIY (guide)',buyer:'—',seller:'Private investor consortium',date:'27 May 2026',desc:'Grade-A office fully let to the Office of Public Works on a 10-year lease; €14m guide, not a completed transaction.',url:'https://www.irishtimes.com/property/commercial-property/2026/05/27/dublin-8-office-investment-fully-let-to-office-of-public-works-seeking-14m/'},
+  {year:2025,sector:'Office',name:'20 Kildare Street',city:'Dublin 2',lat:53.3397,lng:-6.2554,price:74.5,status:'Completed',yield:'5.17% NIY',buyer:'Deka Immobilien',seller:'Kennedy Wilson',date:'27 Jun 2025',desc:'Fully occupied prime office development with strong ESG credentials, near St Stephen’s Green and Leinster House.',url:'https://www.deka.de/deka-group/media-research-en/media-releases/archive/archive2025/juni-1/deka-immobilien-acquires-prime-office-property-with-excellent-esg-profile-in-dublin-ireland'},
+  {year:2025,sector:'Office',name:'Ten Hanover Quay',city:'Dublin 2',lat:53.3450,lng:-6.2360,price:65.6,status:'Completed',yield:'5.41% NIY',buyer:'Pontegadea',seller:'Kennedy Wilson',date:'2025',desc:'Prime Dublin 2 office transaction cited by Colliers / Knight Frank as part of the return of institutional core liquidity.',url:'https://www.knightfrank.ie/research/dublin-office-market-q2-2025'},
+  {year:2025,sector:'Office',name:'2 Dublin Landings',city:'Dublin 1',lat:53.3492,lng:-6.2388,price:51.5,status:'Completed',yield:'Not reported',buyer:'MEAG',seller:'Hana Financial Group / receivers',date:'10 Nov 2025',desc:'100,000+ sq ft LEED Platinum / BER A3 office. About 75% let to WeWork with vacant penthouse space.',url:'https://www.rte.ie/news/business/2025/1110/1543134-2-dublin-landings-sells-for-over-50m-to-germanys-meag/'},
+  {year:2026,sector:'BTR / Residential',name:'18 Newmarket Square',city:'Dublin 8',lat:53.3357,lng:-6.2794,price:75.7,status:'Completed',yield:'4.75% NIY',buyer:'MEAG',seller:'Revelate / Valpre / Aventicum',date:'30 Jan 2026',desc:'134-unit build-to-rent scheme in the Liberties with retail and shared amenity space.',url:'https://www.irishtimes.com/business/2026/01/30/development-comprising-134-apartments-in-the-liberties-sold-for-80m/'},
+  {year:2024,sector:'PBSA',name:'Point Campus',city:'Dublin Docklands',lat:53.3487,lng:-6.2280,price:150,status:'Completed',yield:'Not reported',buyer:'Greystar',seller:'DWS',date:'20 Dec 2024',desc:'966-bed student accommodation scheme, fully occupied, with gym, cinema, common room and roof terrace.',url:'https://www.rte.ie/news/business/2024/1220/1487579-greystar-acquires-point-campus-for-around-150m/'},
+  {year:2025,sector:'Retail Shopping Centre',name:'Jervis Shopping Centre',city:'Dublin 1',lat:53.3482,lng:-6.2675,price:115,status:'Preferred bidder',yield:'Not reported',buyer:'Pradera Lateral',seller:'Private Irish',date:'24 Jul 2025',desc:'c.385,000 sq ft city-centre shopping centre; preferred bid around €115m after a competitive process.',url:'https://www.irishtimes.com/property/commercial-property/2025/07/24/uk-investor-closing-in-on-115m-purchase-of-jervis-shopping-centre/'},
+  {year:2026,sector:'Retail High Street',name:'44 Henry Street',city:'Dublin 1',lat:53.3498,lng:-6.2607,price:4.15,status:'Completed',yield:'7.9% NIY',buyer:'Carrolls Irish Gifts',seller:'Private',date:'20 May 2026',desc:'Prominent Henry Street retail investment, occupied by Carrolls Irish Gifts on a long FRI lease.',url:'https://www.irishtimes.com/property/commercial-property/2026/05/20/carrolls-irish-gifts-in-the-415m-deal-for-henry-street-premises/'},
+  {year:2025,sector:'Retail High Street',name:'54 Dawson Street',city:'Dublin 2',lat:53.3410,lng:-6.2605,price:3.25,status:'Completed',yield:'5.31% NIY',buyer:'Private investor',seller:'Private',date:'29 Oct 2025',desc:'Fully let mixed-use investment adjacent to the Dawson Street Luas stop. Sale price was ~15% above guide.',url:'https://www.colliers.com/en-ie/news/colliers-sell-a-prime-mixed-use-investment-54-dawson-st'},
+  {year:2026,sector:'Retail High Street',name:'30–31 Lower O’Connell Street',city:'Dublin 1',lat:53.3506,lng:-6.2625,price:3.3,status:'Completed',yield:'Not reported',buyer:'IROKO',seller:'Private',date:'29 Jan 2026',desc:'Fully let mixed-use investment with Mountain Warehouse at ground/basement and Element Pictures above.',url:'https://www.colliers.com/en-ie/news/colliers-concludes-sale-of-30-31-lower-oconnell-street'},
+  {year:2026,sector:'Retail Warehouse',name:'Gulliver’s Retail Park',city:'Santry',lat:53.3997,lng:-6.2485,price:45,status:'Proposed / pending',yield:'Not reported',buyer:'Union Investment',seller:'Minaun Capital',date:'2 Sep 2026',desc:'13,261 sqm retail park; proposed transaction value around €45m, versus €29.5m acquisition in 2024.',url:'https://www.irishtimes.com/property/commercial-property/2026/09/02/sherry-fitzgerald-owner-eyes-52-profit-from-sale-of-dublin-retail-park-to-german-fund/'},
+  {year:2026,sector:'Retail Warehouse',name:'Liffey Valley Retail Park',city:'Dublin 22',lat:53.3460,lng:-6.4300,price:60,status:'Guide / upcoming',yield:'Not reported',buyer:'—',seller:'Eircom Superannuation Fund',date:'1 Apr 2026',desc:'c.205,500 sq ft retail park; expected to come to market at a guide around €60m.',url:'https://www.irishtimes.com/property/commercial-property/2026/04/01/dublins-liffey-valley-retail-park-primed-for-60m-sale/'},
+  {year:2026,sector:'Logistics',name:'North Gate Portfolio',city:'Furry Park / North Dublin',lat:53.3962,lng:-6.2297,price:60,status:'Completed',yield:'Not reported',buyer:'Chancerygate',seller:'IPUT',date:'14 Jan 2026',desc:'12-asset logistics portfolio across Furry Park Industrial Estate and North Dublin Corporate Park, c.341,900 sq ft.',url:'https://www.irishtimes.com/property/commercial-property/2026/01/14/uk-developer-completes-60m-purchase-of-dublin-logistics-portfolio/'},
+  {year:2025,sector:'Logistics',name:'Unit 1 Stadium Business Park',city:'Ballycoolin, Dublin 15',lat:53.4072,lng:-6.3746,price:12.8,status:'Completed',yield:'Not reported',buyer:'French fund',seller:'New Frontier Properties',date:'2 Jul 2025',desc:'78,441 sq ft warehouse occupied by Dunnes Stores; sold for about €12.8m.',url:'https://www.irishtimes.com/property/commercial-property/2025/07/02/french-fund-pays-128m-for-dunnes-stores-warehouse-facility-in-dublin-15/'},
+  {year:2025,sector:'Retail High Street',name:'65-66 Grafton Street',city:'Dublin 2',lat:53.3412,lng:-6.2609,price:19,status:'Completed',yield:'Not reported',buyer:'Private Irish',seller:'IPUT / Aviva',date:'2025',desc:'Prime Grafton Street retail investment included in BNP Paribas Real Estate top Irish retail transactions for 2025.',url:'https://www.realestate.bnpparibas.ie/media/ireland/2026-03/BNPPRE_Irl_Q4%202025_Capital%20Markets%20Report_0.pdf'},
+  {year:2025,sector:'Retail High Street',name:'78-79 Grafton Street',city:'Dublin 2',lat:53.3412,lng:-6.2603,price:14.5,status:'Completed',yield:'Not reported',buyer:'Ronan Group Real Estate',seller:'Grant Thornton / receivership',date:'Feb 2025',desc:"Bewley's Cafe property on Grafton Street, acquired out of receivership by Ronan Group Real Estate.",url:'https://www.rte.ie/news/business/2025/0228/1499497-ronan-group-real-estate-buys-back-four-former-assets/'},
+  {year:2025,sector:'Office',name:'Central Quay',city:'Dublin 2',lat:53.3447,lng:-6.2363,price:42,status:'Completed',yield:'6.82% NIY',buyer:'Atland Voisin',seller:'Hibernia RE',date:'Q1 2025',desc:'Six-storey modern office building in South Docks, acquired for approximately €42m / 6.82% NIY.',url:'https://www.colliers.com/en-ie/research/q1-2025-capital-markets-report'},
+  {year:2024,sector:'Office',name:'40 Molesworth Street',city:'Dublin 2',lat:53.3411,lng:-6.2588,price:37.3,status:'Completed',yield:'5.2% NIY',buyer:'Deka Immobilien',seller:'State Street Global Advisors',date:'10 May 2024',desc:'Prime CBD office acquired for approximately €37.3m; fully leased with DLA Piper as main office occupier.',url:'https://www.colliers.com/en-ie/research/q2-2024-capital-markets-report'},
+  {year:2025,sector:'Hotel',name:'Ruby Molly',city:'Dublin 7',lat:53.3493,lng:-6.2696,price:86,status:'Completed',yield:'5.00% NIY',buyer:'Deka Immobilien',seller:'ESR Group',date:'Q1 2025',desc:'Dublin 7 hotel transaction; one of the largest Irish hotel deals in Q1 2025.',url:'https://www.colliers.com/en-ie/research/q1-2025-capital-markets-report'},
+  {year:2025,sector:'Retail High Street',name:'70 Grafton Street',city:'Dublin 2',lat:53.3415,lng:-6.2606,price:12.5,status:'Completed',yield:'Not reported',buyer:'Ronan Group Real Estate',seller:'Grant Thornton / receivership',date:'Feb 2025',desc:'Grafton Street asset containing PTSB and City Break Apartments; acquired back out of receivership.',url:'https://www.rte.ie/news/business/2025/0228/1499497-ronan-group-real-estate-buys-back-four-former-assets/'},
+  {year:2025,sector:'Office',name:'Infinity Building',city:'Dublin 7',lat:53.3548,lng:-6.2813,price:47.2,status:'Completed',yield:'Not reported',buyer:'Corum',seller:'Credit Suisse',date:'2025',desc:"Included in BNP Paribas Real Estate\x27s top five Irish office transactions of 2025.",url:'https://www.realestate.bnpparibas.ie/media/ireland/2026-03/BNPPRE_Irl_Q4%202025_Capital%20Markets%20Report_0.pdf'},
+
+  {year:2026,sector:'BTR / Residential',name:'Quayside Quarter',city:'Dublin 1',lat:53.3474,lng:-6.2350,price:180,status:'Completed',yield:'Not reported',buyer:'Quantum Immobilien',seller:'Greystar',date:'25 Sep 2026',desc:'268-unit PRS scheme at Dublin Landings in the North Docklands; Quantum Immobilien’s first Irish acquisition. Savills identifies it as the largest Q3 2026 deal.',url:'https://www.irishtimes.com/business/2026/09/25/greystar-closes-180m-sale-of-268-unit-apartment-scheme-to-german-investor/'},
+  {year:2026,sector:'PBSA',name:'Stoneybatter Place',city:'Dublin 7',lat:53.3563,lng:-6.2829,price:35,status:'Completed',yield:'Not reported',buyer:'Commerz Real',seller:'Harrison Street / Elkstone',date:'Aug 2026',desc:'142-bed student accommodation scheme near TUD Grangegorman. Savills Q3 2026 records the deal at almost €35m; public reporting also cites €31.2m of Property Price Register evidence.',url:'https://commerzreal.com/en/press/acquisition-residential-student-complex-dublin/'},
+  {year:2026,sector:'Logistics',name:'Horizon Logistics Park',city:'Swords / Dublin Airport',lat:53.4334,lng:-6.3073,price:500,status:'Completed',yield:'~5.0% NIY (income component)',buyer:'GIC / Valor',seller:'Henderson Park',date:'H1 2026',desc:'24-unit logistics campus in Swords adjacent to Dublin Airport, with planning consent for a further 2m sq ft. CBRE records €500m and c.5.0% NIY on the income-producing component.',url:'https://www.cbre.ie/insights/figures/dublin-industrial-logistics-q2-2026'},
+  {year:2026,sector:'Logistics',name:'EQT Logistics Portfolio',city:'Greenogue / Baldonnell (approx.)',lat:53.2860,lng:-6.4250,price:240,status:'Marketing / potential sale',yield:'~5.5% NIY (guide)',buyer:'TBC',seller:'EQT / GIC',date:'2026',desc:'32-asset Irish logistics portfolio of c.1.3m sq ft, including Greenogue and Baldonnell. Indicative guide around €240m and c.5.5% NIY; the sale process has seen bidder changes.',url:'https://www.bisnow.com/news/dublin/industrial/gic-in-box-seat-for-irelands-biggest-ever-industrial-and-logistics-deal-132639'},
+  {year:2026,sector:'Logistics',name:'DSV Industrial Portfolio',city:'Dublin / Ireland (portfolio centroid)',lat:53.3600,lng:-6.3200,price:70,status:'Completed',yield:'Not reported',buyer:'Realty Income',seller:'DSV',date:'Q3 2026',desc:'DSV sale-and-leaseback of an industrial portfolio to Realty Income for approximately €70m. Location mapped to a Greater Dublin centroid because no single asset address is disclosed.',url:'https://www.rte.ie/news/business/2026/1002/1593833-savills-report/'},
+  {year:2026,sector:'Logistics',name:'Off-market Industrial Portfolio',city:'Greater Dublin (approx.)',lat:53.3350,lng:-6.3650,price:39,status:'Completed',yield:'Not reported',buyer:'Irish pension fund',seller:'Undisclosed',date:'Q3 2026',desc:'Off-market industrial portfolio acquired by an Irish pension fund for €39m. Location mapped to a Greater Dublin centroid because no single address is disclosed.',url:'https://www.rte.ie/news/business/2026/1002/1593833-savills-report/'},
+  {year:2026,sector:'BTR / Residential',name:'Newmarket Yards',city:'Dublin 8',lat:53.3368,lng:-6.2798,price:212,status:'Completed',yield:'4.87% NIY',buyer:'BEO Ventures / GIC',seller:'Bain Capital',date:'Apr 2026',desc:'413 PRS apartments in central Dublin, fully leased at sale. One of the largest Irish residential transactions of 2026.',url:'https://www.baincapital.com/news/bain-capital-announces-sale-newmarket-yards-residential-development-dublin'},
+  {year:2025,sector:'BTR / Residential',name:'Kilcarbery Square',city:'Dublin 22',lat:53.3197,lng:-6.4185,price:48.2,status:'Completed',yield:'5.1% NIY',buyer:'N&W Capital',seller:'Carysfort Capital / Angelo Gordon',date:'Q4 2025',desc:'115 fully stabilised PRS apartments in Clondalkin, purchased for about €48.2m at 5.1% NIY.',url:'https://www.irishtimes.com/property/commercial-property/2026/01/21/dutch-family-office-in-50m-deal-for-dublin-apartment-portfolio/'},
+  {year:2025,sector:'BTR / Residential',name:'Spencer Place Residential',city:'Dublin 1',lat:53.3510,lng:-6.2318,price:177,status:'Completed',yield:'4.9% NIY',buyer:'Ardstone',seller:'RGRE / Fortress',date:'Q3 2025',desc:'363-unit private rental scheme in the North Docklands, including 64 co-living units; CBRE records 4.9% NIY.',url:'https://www.realestate.bnpparibas.ie/media/ireland/2026-03/BNPPRE_Irl_Q4%202025_Capital%20Markets%20Report_0.pdf'},
+  {year:2025,sector:'BTR / Residential',name:'Birchwood Court',city:'Dublin 9',lat:53.3976,lng:-6.2454,price:79,status:'Completed',yield:'5.0% NIY (off ERV)',buyer:'Ardstone',seller:'Receivership',date:'Q4 2025',desc:'178-unit suburban BTR scheme in north Dublin; 5.0% NIY off ERV, with lease-up underway at the time of the CBRE report.',url:'https://www.realestate.bnpparibas.ie/media/ireland/2026-03/BNPPRE_Irl_Q4%202025_Capital%20Markets%20Report_0.pdf'},
+  {year:2025,sector:'BTR / Residential',name:'18 Newmarket Square',city:'Dublin 8',lat:53.3358,lng:-6.2809,price:75.7,status:'Completed',yield:'4.75% NIY',buyer:'MEAG',seller:'Revalate Capital',date:'Q4 2025',desc:'134-unit PRS scheme on the fringe of Dublin city centre; completed in Q4 2025. CBRE records 4.75% NIY.',url:'https://www.realestate.bnpparibas.ie/media/ireland/2026-03/BNPPRE_Irl_Q4%202025_Capital%20Markets%20Report_0.pdf'},
+
+];
+
+let txnMap=null, txnMarkers=[], txnSector='All', txnYear='All', txnInited=false, txnFallback=false, txnLeafletLoader=null;
+const sectorOrder=['All','Office','BTR / Residential','Retail High Street','Retail Shopping Centre','Retail Warehouse','Logistics','PBSA','Hotel'];
+function sectorColor(s){return ({'Office':'#E8A13A','BTR / Residential':'#4BA7B5','Retail High Street':'#9C6ADE','Retail Shopping Centre':'#D97706','Retail Warehouse':'#46C77C','Logistics':'#5B8FF9','PBSA':'#F0616D','Hotel':'#C9A227'})[s]||'#7E889B';}
+function fmtTxnValue(v,status){return ['Guide','Guide / upcoming','Proposed / pending','Agreed / pending','Preferred bidder','Marketing / potential sale'].includes(status)?'€'+(Number.isInteger(v)?v:v.toFixed(1))+'m*':'€'+(Number.isInteger(v)?v:v.toFixed(1))+'m';}
+function buildTxnControls(){const sb=document.getElementById('txnSectorBtns'),yb=document.getElementById('txnYearBtns');if(!sb||!yb)return;if(!sb.children.length){sectorOrder.forEach((s,i)=>{const b=document.createElement('button');b.type='button';b.textContent=s;b.dataset.s=s;if(i===0)b.classList.add('on');b.addEventListener('click',()=>{txnSector=s;document.querySelectorAll('#txnSectorBtns button').forEach(x=>x.classList.remove('on'));b.classList.add('on');drawTxn();});sb.appendChild(b);});}if(!yb.children.length){['All','2024','2025','2026'].forEach((y,i)=>{const b=document.createElement('button');b.type='button';b.textContent=y;b.dataset.y=y;if(i===0)b.classList.add('on');b.addEventListener('click',()=>{txnYear=y;document.querySelectorAll('#txnYearBtns button').forEach(x=>x.classList.remove('on'));b.classList.add('on');drawTxn();});yb.appendChild(b);});}const legend=document.getElementById('txnLegend');if(legend)legend.innerHTML=Object.keys(sectorColor).map(s=>`<span><i class="txn-dot" style="background:${sectorColor(s)}"></i>${s}</span>`).join('');}
+function loadLeaflet(){if(window.L)return Promise.resolve(true);if(txnLeafletLoader)return txnLeafletLoader;txnLeafletLoader=new Promise(resolve=>{const urls=['https://unpkg.com/leaflet@1.9.4/dist/leaflet.js','https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js'];let i=0;const next=()=>{if(window.L){resolve(true);return;}if(i>=urls.length){resolve(false);return;}const sc=document.createElement('script');sc.src=urls[i++];sc.async=true;sc.onload=()=>resolve(!!window.L);sc.onerror=next;document.head.appendChild(sc);};next();});return txnLeafletLoader;}
+function txnRows(){return TXN.filter(r=>(txnSector==='All'||r.sector===txnSector)&&(txnYear==='All'||String(r.year)===txnYear));}
+function popupHtml(r){return `<div class="txn-popup"><h4>${r.name}</h4><div class="meta">${r.sector} · ${r.city} · ${r.year} · ${r.status}</div><div class="grid"><div class="k">Price</div><div class="v">${fmtTxnValue(r.price,r.status)}</div><div class="k">Yield</div><div class="v">${r.yield}</div><div class="k">Buyer</div><div class="v">${r.buyer}</div><div class="k">Seller</div><div class="v">${r.seller}</div></div><div class="desc">${r.desc}</div><a href="${r.url}" target="_blank" rel="noopener">Source ↗</a></div>`;}
+function initTxn(){buildTxnControls();if(txnInited||txnFallback){if(txnMap&&txnMap.invalidateSize)setTimeout(()=>txnMap.invalidateSize(),120);drawTxn();return;}txnInited=true;loadLeaflet().then(ok=>{if(ok){try{txnMap=L.map('txnMap',{scrollWheelZoom:true,zoomControl:true,attributionControl:true}).setView([53.3498,-6.2603],12);const tiles=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors',maxZoom:19});let errs=0;tiles.on('tileerror',()=>{errs++;if(errs>=4&&!txnFallback)showTxnFallback();});tiles.addTo(txnMap);drawTxn();setTimeout(()=>{if(!txnFallback&&document.querySelectorAll('#txnMap .leaflet-tile-loaded').length===0)showTxnFallback();},2200);setTimeout(()=>txnMap&&txnMap.invalidateSize(),200);}catch(e){showTxnFallback();}}else showTxnFallback();});}
+function projectFallback(lat,lng){const x=(lng+6.48)/0.38*1000,y=(53.48-lat)/0.20*600;return [Math.max(18,Math.min(982,x)),Math.max(18,Math.min(582,y))];}
+function showTxnFallback(){txnFallback=true;if(txnMap){try{txnMap.remove();}catch(e){}txnMap=null;}const host=document.getElementById('txnFallback');if(!host)return;host.style.display='block';host.innerHTML=`<svg viewBox="0 0 1000 600" xmlns="http://www.w3.org/2000/svg" aria-label="Dublin investment transaction map"><rect width="1000" height="600" class="txn-fallback-land"/><path d="M0 330 C180 290 280 315 380 300 C470 288 520 245 600 270 C700 300 790 280 1000 315 L1000 380 C820 350 720 390 600 365 C500 345 410 375 320 360 C220 345 120 380 0 370Z" class="txn-fallback-water"/><path d="M120 525 C220 450 300 400 375 345 C430 305 470 270 510 238" class="txn-fallback-major"/><path d="M790 20 C730 105 675 175 630 250 C595 305 565 355 520 425 C480 485 420 540 350 600" class="txn-fallback-road"/><path d="M60 170 C220 190 345 205 470 225 C600 245 760 235 980 205" class="txn-fallback-road"/><path d="M45 455 C210 425 320 430 445 450 C575 470 720 500 955 485" class="txn-fallback-road"/><g class="txn-fallback-label"><text x="55" y="80">Swords / Airport</text><text x="120" y="250">Dublin 15</text><text x="820" y="260">Dublin 1</text><text x="705" y="410">Dublin 2 / Docklands</text><text x="135" y="495">Dublin 22</text><text x="395" y="385">Dublin 8</text></g><text x="500" y="295" text-anchor="middle" class="txn-fallback-city">Dublin</text><g id="txnFallbackMarkers"></g></svg><div class="txn-map-note">Fallback map active · portfolio / undisclosed-address comps use approximate centroids.</div>`;drawTxn();}
+function showFallbackCard(r,x,y){const old=document.getElementById('txnFallbackCard');if(old)old.remove();const c=document.createElement('div');c.id='txnFallbackCard';c.style.cssText='position:absolute;z-index:800;left:'+Math.min(62,Math.max(2,x/10-18))+'%;top:'+Math.min(72,Math.max(5,y/6-12))+'%;width:270px;background:#fff;color:#111725;border:1px solid #b9c5cb;border-radius:5px;padding:11px;box-shadow:0 4px 12px rgba(0,0,0,.18)';c.innerHTML=popupHtml(r)+'<button type="button" style="position:absolute;right:7px;top:5px;border:0;background:transparent;font-size:18px;color:#6b7785;cursor:pointer" aria-label="Close">×</button>';c.querySelector('button').addEventListener('click',()=>c.remove());document.getElementById('txnMap').appendChild(c);}
+function drawTxn(){const rows=txnRows();if(txnFallback){const g=document.getElementById('txnFallbackMarkers');if(!g)return;g.innerHTML='';rows.forEach(r=>{const [x,y]=projectFallback(r.lat,r.lng),pending=/pending|guide|preferred|upcoming|potential/i.test(r.status);const el=document.createElementNS('http://www.w3.org/2000/svg','circle');el.setAttribute('cx',x);el.setAttribute('cy',y);el.setAttribute('r',pending?7:6);el.setAttribute('fill',sectorColor(r.sector));el.setAttribute('class','txn-fallback-marker'+(pending?' pending':''));el.addEventListener('click',()=>showFallbackCard(r,x,y));el.addEventListener('mouseenter',()=>{if(window.matchMedia('(hover:hover) and (pointer:fine)').matches)showFallbackCard(r,x,y);});g.appendChild(el);});}else if(txnMap){txnMarkers.forEach(m=>m.remove());txnMarkers=[];rows.forEach(r=>{const pending=/pending|guide|preferred|upcoming|potential/i.test(r.status),icon=L.divIcon({className:'',html:`<div class="txn-marker${pending?' pending':''}" style="background:${sectorColor(r.sector)}"></div>`,iconSize:[16,16],iconAnchor:[8,8],popupAnchor:[0,-8]});const m=L.marker([r.lat,r.lng],{icon}).addTo(txnMap).bindPopup(popupHtml(r),{maxWidth:330,closeButton:true});m.on('mouseover',()=>{if(window.matchMedia('(hover:hover) and (pointer:fine)').matches)m.openPopup();});txnMarkers.push(m);});if(rows.length){const b=L.latLngBounds(rows.map(r=>[r.lat,r.lng]));txnMap.fitBounds(b,{padding:[35,35],maxZoom:13.3});}else txnMap.setView([53.3498,-6.2603],11.8);}const total=rows.reduce((a,r)=>a+(Number(r.price)||0),0);document.getElementById('txnCount').textContent=rows.length;document.getElementById('txnValue').textContent=rows.length?'€'+total.toFixed(0)+'m':'—';document.getElementById('txnLatest').textContent=rows.length?Math.max(...rows.map(r=>r.year)):'—';}
+document.querySelector('.tab[data-v="transactions"]').addEventListener('click',()=>setTimeout(initTxn,40));
+if(document.getElementById('transactions')?.classList.contains('on'))setTimeout(initTxn,40);</script>
+</body>
+</html>
